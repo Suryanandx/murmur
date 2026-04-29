@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Murmur — Local-First Voice AI Pipeline</title>
+  <meta name="description" content="Open-source agentic voice pipeline. STT → LLM → TTS. Every major provider. Self-hosted, private, streaming." />
+  <meta property="og:title" content="Murmur — Local-First Voice AI Pipeline" />
+  <meta property="og:description" content="Open-source agentic voice pipeline. STT → LLM → TTS. Every major provider." />
+  <meta property="og:image" content="https://murmur.valthrax.com/og.png" />
+  <meta property="og:url" content="https://murmur.valthrax.com" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080810;
+      --bg2: #0e0e1a;
+      --bg3: #13131f;
+      --border: rgba(99,102,241,0.15);
+      --border-h: rgba(99,102,241,0.35);
+      --indigo: #6366f1;
+      --violet: #8b5cf6;
+      --purple: #a78bfa;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --dim: #94a3b8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --radius: 12px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Grid background ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Glow blobs ── */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 { width: 600px; height: 600px; background: rgba(99,102,241,0.07); top: -200px; left: -200px; }
+    .blob-2 { width: 500px; height: 500px; background: rgba(139,92,246,0.06); bottom: 10%; right: -150px; }
+    .blob-3 { width: 400px; height: 400px; background: rgba(59,130,246,0.05); top: 40%; left: 40%; }
+
+    /* ── Layout ── */
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,8,16,0.8);
+    }
+    .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .nav-logo-icon {
+      width: 32px; height: 32px;
+    }
+    .nav-logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e2e8f0, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--dim);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-cta {
+      background: var(--indigo) !important;
+      color: #fff !important;
+      font-weight: 600;
+    }
+    .nav-cta:hover { background: var(--violet) !important; }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 100px 24px 80px;
+      position: relative;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(99,102,241,0.1);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 12px;
+      color: var(--purple);
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      margin-bottom: 32px;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 8vw, 80px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 8px;
+    }
+    .hero h1 .word-murmur {
+      background: linear-gradient(135deg, #e2e8f0 0%, #a78bfa 50%, #6366f1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero h1 .word-sub {
+      display: block;
+      font-size: clamp(18px, 3vw, 28px);
+      font-weight: 400;
+      color: var(--muted);
+      letter-spacing: 0;
+      margin-top: 12px;
+    }
+
+    .hero-desc {
+      max-width: 560px;
+      color: var(--dim);
+      font-size: 18px;
+      line-height: 1.7;
+      margin: 28px auto 40px;
+    }
+
+    /* ── Waveform animation ── */
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 0 auto 48px;
+    }
+    .wave-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, var(--indigo), var(--violet));
+      animation: wave-anim 1.4s ease-in-out infinite;
+    }
+    @keyframes wave-anim {
+      0%, 100% { transform: scaleY(0.3); }
+      50% { transform: scaleY(1); }
+    }
+
+    /* ── Pipeline flow ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 0 auto 52px;
+      flex-wrap: wrap;
+    }
+    .pipe-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .pipe-box {
+      padding: 10px 20px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      transition: all 0.25s;
+    }
+    .pipe-box:hover { border-color: var(--indigo); background: rgba(99,102,241,0.08); }
+    .pipe-box.stt { color: #60a5fa; border-color: rgba(59,130,246,0.25); }
+    .pipe-box.llm { color: #c4b5fd; border-color: rgba(139,92,246,0.25); }
+    .pipe-box.tts { color: #86efac; border-color: rgba(34,197,94,0.25); }
+    .pipe-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .pipe-arrow {
+      padding: 0 12px;
+      color: var(--indigo);
+      font-size: 20px;
+      opacity: 0.6;
+      margin-bottom: 20px;
+    }
+
+    /* ── CTA buttons ── */
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--indigo);
+      color: #fff;
+      box-shadow: 0 0 32px rgba(99,102,241,0.3);
+    }
+    .btn-primary:hover {
+      background: var(--violet);
+      box-shadow: 0 0 48px rgba(139,92,246,0.4);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: var(--border-h);
+      transform: translateY(-1px);
+    }
+
+    /* ── Quick install bar ── */
+    .install-bar {
+      margin: 52px auto 0;
+      max-width: 480px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+    }
+    .install-prompt { color: var(--green); font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+    .install-cmd { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--dim); flex: 1; }
+    .install-copy {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .install-copy:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+
+    /* ── Sections ── */
+    section { padding: 100px 0; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--indigo);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--dim);
+      font-size: 17px;
+      max-width: 520px;
+    }
+
+    /* ── Features grid ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 60px;
+    }
+    .feature-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: all 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 0 0, rgba(99,102,241,0.06), transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover { border-color: var(--border-h); transform: translateY(-2px); }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+    .feature-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p { font-size: 14px; color: var(--dim); line-height: 1.6; }
+
+    /* ── Provider table ── */
+    .providers-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 48px 0 28px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 8px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    .tab-btn:hover { color: var(--text); border-color: var(--border-h); }
+    .tab-btn.active { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+    .provider-panel { display: none; }
+    .provider-panel.active { display: block; }
+    .provider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .provider-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: all 0.2s;
+    }
+    .provider-card:hover { border-color: var(--border-h); }
+    .provider-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-local { background: var(--green); }
+    .dot-cloud { background: var(--amber); }
+    .dot-free { background: var(--blue); }
+    .provider-name { font-size: 14px; font-weight: 600; }
+    .provider-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .provider-star { margin-left: auto; color: var(--indigo); font-size: 12px; }
+
+    /* ── Code block ── */
+    .code-section { background: var(--bg2); }
+    .code-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .code-tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      font-family: 'JetBrains Mono', monospace;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+    .code-tab.active { color: var(--indigo); border-bottom-color: var(--indigo); }
+    .code-wrapper {
+      background: #0a0a14;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .code-dots { display: flex; gap: 6px; }
+    .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .code-filename { font-size: 12px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    pre {
+      padding: 24px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #e2e8f0;
+    }
+    .kw { color: #c4b5fd; }
+    .fn { color: #60a5fa; }
+    .st { color: #86efac; }
+    .cm { color: #475569; font-style: italic; }
+    .nu { color: #fb923c; }
+    .op { color: #a78bfa; }
+
+    /* ── How it works ── */
+    .steps { margin-top: 60px; }
+    .step {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      gap: 20px;
+      margin-bottom: 36px;
+      align-items: start;
+    }
+    .step-num {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: rgba(99,102,241,0.1);
+      border: 1px solid rgba(99,102,241,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: var(--indigo);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .step-content h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .step-content p { font-size: 14px; color: var(--dim); line-height: 1.6; }
+    .step-code {
+      margin-top: 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    /* ── Author ── */
+    .author-section {
+      text-align: center;
+      padding: 80px 24px;
+      border-top: 1px solid var(--border);
+    }
+    .author-card {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 52px;
+      max-width: 440px;
+      width: 100%;
+    }
+    .author-avatar {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .author-name {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .author-handle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .author-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .author-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--dim);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .author-link:hover { color: var(--text); border-color: var(--border-h); background: rgba(255,255,255,0.04); }
+    .author-link svg { flex-shrink: 0; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .pipe-arrow { display: none; }
+      .pipeline { gap: 8px; }
+      .step { grid-template-columns: 1fr; }
+      .step-num { display: none; }
+      .author-card { padding: 32px 24px; }
+    }
+
+    /* ── Scroll reveal ── */
+    .reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* ── Stats row ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 60px 0 0;
+    }
+    .stat {
+      background: var(--bg2);
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .stat-val {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, var(--text), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- ── Nav ── -->
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">
+        <svg class="nav-logo-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="64" height="64" rx="14" fill="url(#navgrad)"/>
+          <defs>
+            <linearGradient id="navgrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#1e1b4b"/>
+              <stop offset="1" stop-color="#312e81"/>
+            </linearGradient>
+          </defs>
+          <rect x="26" y="13" width="12" height="20" rx="6" fill="#a78bfa"/>
+          <path d="M20 28 Q20 40 32 40 Q44 40 44 28" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <line x1="32" y1="40" x2="32" y2="48" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+          <line x1="25" y1="48" x2="39" y2="48" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="nav-logo-text">murmur</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#providers">Providers</a></li>
+        <li><a href="#quickstart">Quickstart</a></li>
+        <li><a href="https://github.com/Suryanandx/murmur" target="_blank">GitHub ↗</a></li>
+        <li><a href="https://github.com/Suryanandx/murmur" target="_blank" class="btn btn-ghost nav-cta" style="padding:6px 14px;font-size:13px;">Star ★</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      v0.1.0 · Open Source · Apache 2.0
+    </div>
+
+    <h1>
+      <span class="word-murmur">murmur</span>
+      <span class="word-sub">Local-first voice AI pipeline</span>
+    </h1>
+
+    <div class="waveform" id="waveform" aria-hidden="true"></div>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-box stt">STT</div>
+        <div class="pipe-label">speech → text</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-box llm">LLM</div>
+        <div class="pipe-label">reasoning</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="pipe-box tts">TTS</div>
+        <div class="pipe-label">text → speech</div>
+      </div>
+    </div>
+
+    <p class="hero-desc">
+      Swap any provider in one config line. Run fully offline or mix cloud services.
+      Streaming sentence-by-sentence — first word spoken in under a second.
+    </p>
+
+    <div class="cta-row">
+      <a href="#quickstart" class="btn btn-primary">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Get started
+      </a>
+      <a href="https://github.com/Suryanandx/murmur" target="_blank" class="btn btn-ghost">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+
+    <div class="install-bar">
+      <span class="install-prompt">$</span>
+      <span class="install-cmd" id="install-cmd">pip install murmur-voice[faster-whisper,kokoro]</span>
+      <button class="install-copy" onclick="copyInstall()" title="Copy">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Stats ── -->
+  <div class="wrap reveal">
+    <div class="stats">
+      <div class="stat"><div class="stat-val">6</div><div class="stat-label">STT Providers</div></div>
+      <div class="stat"><div class="stat-val">5</div><div class="stat-label">LLM Providers</div></div>
+      <div class="stat"><div class="stat-val">7</div><div class="stat-label">TTS Providers</div></div>
+      <div class="stat"><div class="stat-val">&lt;1s</div><div class="stat-label">Time to first word</div></div>
+      <div class="stat"><div class="stat-val">100%</div><div class="stat-label">Local capable</div></div>
+    </div>
+  </div>
+
+  <!-- ── Features ── -->
+  <section id="features">
+    <div class="wrap">
+      <div class="reveal">
+        <div class="section-label">Why Murmur</div>
+        <h2 class="section-title">Everything you need,<br/>nothing you don't.</h2>
+        <p class="section-sub">Designed for developers who want a self-hostable voice stack without the cloud lock-in.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(99,102,241,0.1)">🔒</div>
+          <h3>Privacy-first</h3>
+          <p>Audio never leaves your device by default. Fully local STT and TTS with faster-whisper and Kokoro. No telemetry, no analytics.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(34,197,94,0.1)">⚡</div>
+          <h3>Streaming pipeline</h3>
+          <p>Sentence-boundary buffering means TTS starts speaking the first sentence while LLM generates the second. Under 1s perceived latency.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(139,92,246,0.1)">🔌</div>
+          <h3>Every provider</h3>
+          <p>Swap STT, LLM, or TTS by changing one line in your config. Mix local and cloud freely. Free options available for every stage.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(59,130,246,0.1)">🌐</div>
+          <h3>OpenRouter native</h3>
+          <p>One API key unlocks 100+ models — GPT-4o, Claude, Gemini, Llama, Mistral. Free tier models available with no credit card.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(245,158,11,0.1)">🐳</div>
+          <h3>Docker ready</h3>
+          <p>One-command setup with Docker Compose. CPU and GPU images available. Multi-arch: amd64 and arm64.</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon" style="background:rgba(34,197,94,0.1)">🛠</div>
+          <h3>Clean Python API</h3>
+          <p>Use as a library in your own project. Event bus, async generators, typed providers — built to be extended.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Providers ── -->
+  <section id="providers" style="padding-top:0">
+    <div class="wrap">
+      <div class="reveal">
+        <div class="section-label">Providers</div>
+        <h2 class="section-title">Your stack, your choice.</h2>
+        <p class="section-sub">Every tier covered — from fully offline to ultra-low latency cloud.</p>
+      </div>
+      <div class="providers-tabs reveal">
+        <button class="tab-btn active" onclick="switchTab('stt',this)">STT — Speech to Text</button>
+        <button class="tab-btn" onclick="switchTab('llm',this)">LLM — Language Model</button>
+        <button class="tab-btn" onclick="switchTab('tts',this)">TTS — Text to Speech</button>
+      </div>
+      <div id="panel-stt" class="provider-panel active reveal">
+        <div class="provider-grid">
+          <div class="provider-card"><span class="provider-dot dot-local"></span><div><div class="provider-name">faster-whisper</div><div class="provider-meta">Local · No API key</div></div><span class="provider-star">★ default</span></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">Groq Whisper</div><div class="provider-meta">Cloud · ~200ms latency</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">Deepgram Nova-2</div><div class="provider-meta">Cloud · Streaming support</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">OpenAI Whisper</div><div class="provider-meta">Cloud · Reliable</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">AssemblyAI</div><div class="provider-meta">Cloud · Best punctuation</div></div></div>
+        </div>
+      </div>
+      <div id="panel-llm" class="provider-panel reveal">
+        <div class="provider-grid">
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">OpenRouter</div><div class="provider-meta">100+ models · Free tier</div></div><span class="provider-star">★ default</span></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">OpenAI</div><div class="provider-meta">GPT-4o, GPT-4o-mini</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">Anthropic</div><div class="provider-meta">Claude 3.5, Haiku</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-local"></span><div><div class="provider-name">Ollama</div><div class="provider-meta">Local · Any GGUF model</div></div></div>
+        </div>
+      </div>
+      <div id="panel-tts" class="provider-panel reveal">
+        <div class="provider-grid">
+          <div class="provider-card"><span class="provider-dot dot-local"></span><div><div class="provider-name">Kokoro</div><div class="provider-meta">Local · High quality</div></div><span class="provider-star">★ default</span></div>
+          <div class="provider-card"><span class="provider-dot dot-local"></span><div><div class="provider-name">Piper</div><div class="provider-meta">Local · Edge-optimised</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-free"></span><div><div class="provider-name">Edge-TTS</div><div class="provider-meta">Free · 300+ voices</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">ElevenLabs</div><div class="provider-meta">Cloud · Best quality</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">OpenAI TTS</div><div class="provider-meta">Cloud · tts-1 / tts-1-hd</div></div></div>
+          <div class="provider-card"><span class="provider-dot dot-cloud"></span><div><div class="provider-name">Cartesia</div><div class="provider-meta">Cloud · &lt;80ms latency</div></div></div>
+        </div>
+      </div>
+      <div style="margin-top:16px;font-size:13px;color:var(--muted)">
+        <span style="color:var(--green)">●</span> local &nbsp;
+        <span style="color:var(--amber)">●</span> cloud &nbsp;
+        <span style="color:var(--blue)">●</span> free (no key)
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Quickstart ── -->
+  <section id="quickstart">
+    <div class="wrap">
+      <div class="reveal">
+        <div class="section-label">Quickstart</div>
+        <h2 class="section-title">Up and running in 5 minutes.</h2>
+        <p class="section-sub">Start fully local or plug in your favourite cloud providers.</p>
+      </div>
+      <div class="steps reveal">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h3>Install</h3>
+            <p>Install Murmur with local providers — no API keys needed for STT and TTS.</p>
+            <div class="step-code">$ pip install murmur-voice[faster-whisper,kokoro]</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h3>Get a free OpenRouter key</h3>
+            <p>OpenRouter gives you 100+ models through one key. Free models available — no credit card needed.</p>
+            <div class="step-code">$ export OPENROUTER_API_KEY=sk-or-...  <span style="color:#475569"># https://openrouter.ai/keys</span></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h3>Run</h3>
+            <p>Push-to-talk mode by default. Press Enter to speak, Enter again to stop.</p>
+            <div class="step-code">$ murmur run</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h3>Customise your stack</h3>
+            <p>Create a config file and swap any provider in a single line.</p>
+            <div class="step-code">$ murmur init  <span style="color:#475569"># creates murmur.toml</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Code example -->
+      <div class="code-wrapper reveal" style="margin-top:48px">
+        <div class="code-header">
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#febc2e"></div>
+            <div class="code-dot" style="background:#28c840"></div>
+          </div>
+          <span class="code-filename">murmur.toml</span>
+        </div>
+        <pre><span class="cm"># Swap any provider in one line</span>
+
+<span class="op">[stt]</span>
+provider = <span class="st">"faster-whisper"</span>  <span class="cm"># or: groq | deepgram | openai</span>
+
+<span class="op">[llm]</span>
+provider = <span class="st">"openrouter"</span>
+model    = <span class="st">"mistralai/mistral-7b-instruct:free"</span>
+<span class="cm"># model = "anthropic/claude-3-haiku"</span>
+<span class="cm"># model = "openai/gpt-4o-mini"</span>
+<span class="cm"># model = "meta-llama/llama-3.1-70b-instruct"</span>
+
+<span class="op">[tts]</span>
+provider = <span class="st">"kokoro"</span>  <span class="cm"># or: elevenlabs | edge-tts | openai | cartesia</span>
+voice    = <span class="st">"af_sarah"</span></pre>
+      </div>
+
+      <!-- Docker option -->
+      <div class="code-wrapper reveal" style="margin-top:16px">
+        <div class="code-header">
+          <div class="code-dots">
+            <div class="code-dot" style="background:#ff5f57"></div>
+            <div class="code-dot" style="background:#febc2e"></div>
+            <div class="code-dot" style="background:#28c840"></div>
+          </div>
+          <span class="code-filename">docker (one-liner)</span>
+        </div>
+        <pre>$ docker run -it --rm \
+    -e <span class="kw">OPENROUTER_API_KEY</span>=sk-or-... \
+    --device /dev/snd \
+    <span class="st">ghcr.io/suryanandx/murmur:latest</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Author ── -->
+  <div class="author-section" id="about">
+    <p class="section-label" style="margin-bottom:24px">Built by</p>
+    <div class="author-card reveal" style="margin:0 auto">
+      <div class="author-avatar">SS</div>
+      <div>
+        <div class="author-name">Suryanand Sunil</div>
+        <div class="author-handle">@Suryanandx</div>
+      </div>
+      <div class="author-links">
+        <a href="https://suryanand.com" target="_blank" class="author-link">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          suryanand.com
+        </a>
+        <a href="mailto:work@suryanand.com" class="author-link">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          work@suryanand.com
+        </a>
+        <a href="https://github.com/Suryanandx" target="_blank" class="author-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <div class="footer-inner">
+      <span>© 2026 Murmur · Apache 2.0 · Built by <a href="https://suryanand.com" style="color:var(--indigo);text-decoration:none">Suryanand Sunil</a></span>
+      <div class="footer-links">
+        <a href="https://github.com/Suryanandx/murmur">GitHub</a>
+        <a href="https://github.com/Suryanandx/murmur/blob/main/LICENSE">License</a>
+        <a href="https://github.com/Suryanandx/murmur/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="mailto:work@suryanand.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ── Waveform ──
+    const wf = document.getElementById('waveform');
+    const heights = [16,28,42,56,48,64,52,40,60,44,36,28,50,38,24,46,58,32,48,20];
+    heights.forEach((h, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar';
+      bar.style.cssText = `height:${h}px;animation-delay:${(i * 0.07).toFixed(2)}s`;
+      wf.appendChild(bar);
+    });
+
+    // ── Copy install ──
+    function copyInstall() {
+      navigator.clipboard.writeText('pip install murmur-voice[faster-whisper,kokoro]');
+      const btn = document.querySelector('.install-copy');
+      btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="#22c55e" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+      setTimeout(() => {
+        btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+      }, 2000);
+    }
+
+    // ── Tabs ──
+    function switchTab(id, btn) {
+      document.querySelectorAll('.provider-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('panel-' + id).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    // ── Scroll reveal ──
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
