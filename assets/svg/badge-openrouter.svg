@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 28" width="160" height="28">
+  <defs>
+    <linearGradient id="left" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b"/>
+      <stop offset="100%" style="stop-color:#312e81"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="28" rx="6" fill="url(#left)"/>
+  <rect x="70" width="90" height="28" rx="6" fill="url(#right)"/>
+  <rect x="70" width="6" height="28" fill="url(#right)"/>
+  <!-- icon dots -->
+  <circle cx="14" cy="14" r="4" fill="#a78bfa" opacity="0.9"/>
+  <circle cx="24" cy="14" r="3" fill="#8b5cf6" opacity="0.7"/>
+  <circle cx="32" cy="14" r="2" fill="#6366f1" opacity="0.5"/>
+  <!-- left label -->
+  <text x="44" y="19" font-family="'Inter', sans-serif" font-size="11" font-weight="600" fill="#e2e8f0">LLM via</text>
+  <!-- right label -->
+  <text x="80" y="19" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#ffffff">OpenRouter</text>
+</svg>

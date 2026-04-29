@@ -1,0 +1,46 @@
+# Config with secrets
+murmur.toml
+*.local.toml
+.env
+.env.*
+
+# Credentials
+credentials
+
+# Audio (don't commit recorded sessions)
+*.wav
+*.mp3
+*.ogg
+~/.murmur/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.uv/
+
+# Models (large files)
+*.bin
+*.gguf
+*.pt
+*.ckpt
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
+
+# Test artifacts
+.pytest_cache/

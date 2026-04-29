@@ -1,0 +1,56 @@
+services:
+  murmur:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/murmur-voice/murmur:latest
+    # Audio passthrough — requires Linux with PulseAudio or ALSA
+    # On macOS use: brew install pulseaudio
+    devices:
+      - /dev/snd:/dev/snd
+    environment:
+      # Set your API keys here or via .env file
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - CARTESIA_API_KEY=${CARTESIA_API_KEY:-}
+      # Provider overrides
+      - MURMUR_STT_PROVIDER=${MURMUR_STT_PROVIDER:-faster-whisper}
+      - MURMUR_LLM_PROVIDER=${MURMUR_LLM_PROVIDER:-openrouter}
+      - MURMUR_TTS_PROVIDER=${MURMUR_TTS_PROVIDER:-kokoro}
+    volumes:
+      - ./murmur.toml:/app/murmur.toml:ro
+      - murmur-models:/root/.cache/huggingface  # cache Whisper models
+    ports:
+      - "8765:8765"  # optional web UI
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # ── GPU variant (NVIDIA) ──────────────────────────────────────────────────
+  murmur-gpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gpu
+    image: ghcr.io/murmur-voice/murmur:gpu
+    profiles: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MURMUR_STT_PROVIDER=faster-whisper
+      - MURMUR_TTS_PROVIDER=kokoro
+    volumes:
+      - murmur-models:/root/.cache/huggingface
+    stdin_open: true
+    tty: true
+
+volumes:
+  murmur-models:

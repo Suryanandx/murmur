@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b"/>
+      <stop offset="100%" style="stop-color:#312e81"/>
+    </linearGradient>
+    <linearGradient id="mic" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a78bfa"/>
+      <stop offset="100%" style="stop-color:#6366f1"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.4"/>
+      <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:0.4"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- Outer ring pulse -->
+  <circle cx="32" cy="28" r="18" fill="none" stroke="#6366f1" stroke-width="1" opacity="0.3"/>
+  <circle cx="32" cy="28" r="14" fill="none" stroke="#8b5cf6" stroke-width="1" opacity="0.4"/>
+
+  <!-- Microphone body -->
+  <rect x="26" y="13" width="12" height="20" rx="6" fill="url(#mic)" filter="url(#glow)"/>
+
+  <!-- Mic stand arc -->
+  <path d="M20 28 Q20 40 32 40 Q44 40 44 28" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Mic stem -->
+  <line x1="32" y1="40" x2="32" y2="48" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+  <line x1="25" y1="48" x2="39" y2="48" stroke="#a78bfa" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Sound wave lines (left) -->
+  <path d="M15 24 Q13 28 15 32" stroke="url(#wave)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M11 21 Q8 28 11 35" stroke="url(#wave)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- Sound wave lines (right) -->
+  <path d="M49 24 Q51 28 49 32" stroke="url(#wave)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.8"/>
+  <path d="M53 21 Q56 28 53 35" stroke="url(#wave)" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+</svg>

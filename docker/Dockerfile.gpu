@@ -1,0 +1,24 @@
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04 AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-dev python3-pip \
+    portaudio19-dev ffmpeg libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uv
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY murmur/ ./murmur/
+
+RUN uv pip install --system ".[faster-whisper,kokoro,vad,ui]"
+RUN python3.11 -c "from faster_whisper import WhisperModel; WhisperModel('medium', device='cuda')" || true
+
+COPY murmur.example.toml ./murmur.toml
+EXPOSE 8765
+ENTRYPOINT ["murmur"]
+CMD ["run"]
