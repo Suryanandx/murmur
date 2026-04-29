@@ -20,11 +20,11 @@ jobs:
       - name: Install dev deps
         run: uv pip install --system ".[dev]"
       - name: ruff check
-        run: ruff check murmur/
+        run: uv run --no-project ruff check murmur/
       - name: black check
-        run: black --check murmur/
+        run: uv run --no-project black --check murmur/
       - name: mypy
-        run: mypy murmur/ --ignore-missing-imports
+        run: uv run --no-project mypy murmur/ --ignore-missing-imports
 
   test:
     name: Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }})
@@ -39,21 +39,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Install system deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y portaudio19-dev
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends portaudio19-dev
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install portaudio
+
       - name: Install uv
         run: pip install uv
+
       - name: Install package + dev deps
         run: uv pip install --system ".[dev]"
+
       - name: Run unit tests
-        run: pytest tests/unit/ -v --cov=murmur --cov-report=xml
+        run: uv run --no-project pytest tests/unit/ -v --cov=murmur --cov-report=xml
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage.xml
+        continue-on-error: true  # don't fail CI if Codecov token not set
 
   build:
     name: Build wheel
@@ -63,8 +73,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install uv hatchling
-      - run: python -m build --wheel --outdir dist/
+      - name: Install uv + build
+        run: pip install uv build hatchling
+      - name: Build wheel + sdist
+        run: python -m build --outdir dist/
       - uses: actions/upload-artifact@v4
         with:
           name: wheel
